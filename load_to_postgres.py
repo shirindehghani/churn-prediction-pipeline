@@ -1,7 +1,21 @@
+from __future__ import annotations
+
+import re
+from pathlib import Path
+from typing import Optional
+
 import pandas as pd
-import numpy as np
-from sqlalchemy import create_engine, text
-from tqdm import tqdm
+from sqlalchemy import (
+    create_engine,
+    String,
+    Text,
+    BigInteger,
+    Identity,
+    text,
+    Index,
+)
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, Session
+
 
 DB_USER = "sn_dehghani"
 DB_PASS = "sndi"
@@ -14,197 +28,221 @@ orders_csv   = "./data/orders.csv"
 crm_csv      = "./data/crm.csv"
 comments_csv = "./data/order_comments.csv"
 
-engine = create_engine(f"postgresql+psycopg2://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}")
+CHUNK_SIZE = 10_000
+ECHO_SQL   = False
 
-def read_csv_safely(path):
-    try:
-        return pd.read_csv(path)
-    except UnicodeDecodeError:
-        return pd.read_csv(path, encoding="latin1")
 
-def normalize_cols(df: pd.DataFrame):
-    df = df.copy()
-    df.columns = (
-        df.columns.str.strip()
-                  .str.lower()
-                  .str.replace(" ", "_")
-                  .str.replace("-", "_")
+class Base(DeclarativeBase):
+    pass
+
+
+class Orders(Base):
+    __tablename__ = "orders"
+    __table_args__ = (
+        Index("ix_orders_user_date", "user_id", "order_date"),
+        {"schema": SCHEMA},
     )
-    return df
 
-orders_raw   = read_csv_safely(orders_csv)
-crm_raw      = read_csv_safely(crm_csv)
-comments_raw = read_csv_safely(comments_csv)
-
-orders_raw   = normalize_cols(orders_raw)
-crm_raw      = normalize_cols(crm_raw)
-comments_raw = normalize_cols(comments_raw)
-
-orders_map_candidates = {
-    "order_id": "order_id",
-    "id": "order_id",
-    "orderid": "order_id",
-
-    "user_id": "user_id",
-    "userid": "user_id",
-    "user": "user_id",
-
-    "is_otd": "is_otd",
-    "on_time_delivery": "is_otd",
-    "delivered_on_time": "is_otd",
-    "is_on_time": "is_otd",
-
-    "order_date": "order_date",
-    "order_datetime": "order_date",
-    "order_time": "order_date",
-    "created_at": "order_date",
-
-    "delivery_status": "delivery_status",
-    "status": "delivery_status",
-    "delivery_state": "delivery_status",
-}
-
-crm_map_candidates = {
-    "order_id": "order_id",
-    "id": "order_id",
-    "orderid": "order_id",
-
-    "crm_delivery_request_count": "crm_delivery_request_count",
-    "delivery_request_count": "crm_delivery_request_count",
-    "tickets_delivery_request": "crm_delivery_request_count",
-
-    "crm_fake_delivery_request_count": "crm_fake_delivery_request_count",
-    "fake_delivery_request_count": "crm_fake_delivery_request_count",
-
-    "customer_rate": "customer_rate",
-    "customer_rating": "customer_rate",
-    "shop_rating": "customer_rate",
-
-    "courier_rate": "courier_rate",
-    "courier_rating": "courier_rate",
-    "driver_rating": "courier_rate",
-}
-
-comments_map_candidates = {
-    "order_id": "order_id",
-    "id": "order_id",
-    "orderid": "order_id",
-
-    "description": "description",
-    "comment": "description",
-    "comments": "description",
-    "text": "description",
-    "body": "description",
-    "message": "description",
-}
-
-def remap_and_select(df: pd.DataFrame, mapping: dict, required: list) -> pd.DataFrame:
-    rename = {}
-    for col in df.columns:
-        if col in mapping:
-            rename[col] = mapping[col]
-    df = df.rename(columns=rename)
-    present = [c for c in required if c in df.columns]
-    missing = [c for c in required if c not in df.columns]
-    if missing:
-        for m in missing:
-            df[m] = np.nan
-        present = required
-    return df[present]
-
-orders = remap_and_select(
-    orders_raw, orders_map_candidates,
-    ["order_id", "user_id", "is_otd", "order_date", "delivery_status"]
-)
-crm = remap_and_select(
-    crm_raw, crm_map_candidates,
-    ["order_id", "crm_delivery_request_count", "crm_fake_delivery_request_count", "customer_rate", "courier_rate"]
-)
-comments = remap_and_select(
-    comments_raw, comments_map_candidates,
-    ["order_id", "description"]
-)
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=False), primary_key=True)
+    order_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    user_id: Mapped[Optional[str]] = mapped_column(String, nullable=True, index=True)
+    is_otd: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    order_date: Mapped[Optional[str]] = mapped_column(String, nullable=True, index=True)
+    delivery_status: Mapped[Optional[str]] = mapped_column(String, nullable=True)
 
 
-orders["order_id"] = pd.to_numeric
-orders["user_id"] = pd.to_numeric(orders["user_id"], errors="coerce")
+class CRM(Base):
+    __tablename__ = "crm"
+    __table_args__ = {"schema": SCHEMA}
 
-orders = orders.dropna(subset=["order_id", "user_id"])
-orders["order_id"] = orders["order_id"].astype("int64")
-orders["user_id"] = orders["user_id"].astype("int64")
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=False), primary_key=True)
 
-valid_order_ids = set(orders["order_id"].unique())
-if "order_id" in crm.columns:
-    crm = crm[pd.to_numeric(crm["order_id"], errors="coerce").isin(valid_order_ids)]
-    crm["order_id"] = crm["order_id"].astype("int64")
-if "order_id" in comments.columns:
-    comments = comments[pd.to_numeric(comments["order_id"], errors="coerce").isin(valid_order_ids)]
-    comments["order_id"] = comments["order_id"].astype("int64")
+    order_id: Mapped[Optional[str]] = mapped_column(String, nullable=True, index=True)
+    crm_delivery_request_count: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    crm_fake_delivery_request_count: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    rate_to_shop: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    rate_to_courier: Mapped[Optional[str]] = mapped_column(String, nullable=True)
 
 
-orders["order_date"] = pd.to_datetime(orders["order_date"], errors="coerce")
+class Comments(Base):
+    __tablename__ = "comments"
+    __table_args__ = {"schema": SCHEMA}
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=False), primary_key=True)
+
+    order_id: Mapped[Optional[str]] = mapped_column(String, nullable=True, index=True)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
 
-for col in ["customer_rate", "courier_rate", "crm_delivery_request_count", "crm_fake_delivery_request_count"]:
-    if col in crm.columns:
-        crm[col] = pd.to_numeric(crm[col], errors="coerce")
 
-orders = orders.drop_duplicates(subset=["order_id"])
-crm = crm.drop_duplicates(subset=["order_id"])
-comments = comments.drop_duplicates(subset=["order_id"])
+def _read_csv_verbatim(path: str | Path) -> pd.DataFrame:
+    """
+    Preserve values exactly:
+      - dtype=str            -> everything is a string
+      - keep_default_na=False, na_filter=False -> "" stays "", not NaN
+    """
+    return pd.read_csv(
+        path,
+        dtype=str,
+        keep_default_na=False,
+        na_filter=False,
+    )
 
-print(f"Normalized shapes -> orders: {orders.shape}, crm: {crm.shape}, comments: {comments.shape}")
 
-# ------------------- DDL & TRUNCATE -------------------
-with engine.begin() as conn:
-    conn.execute(text(f"""
-    CREATE SCHEMA IF NOT EXISTS {SCHEMA};
+def _normalize_orders_columns(df: pd.DataFrame) -> pd.DataFrame:
+    rename_map = {}
+    for raw in df.columns:
+        key = re.sub(r"[^a-z]", "", raw.lower())
+        if key == "orderid":
+            rename_map[raw] = "order_id"
+        elif key == "userid":
+            rename_map[raw] = "user_id"
+        elif key in {"isotd", "is_ontime", "ontime"}:
+            rename_map[raw] = "is_otd"
+        elif key in {"orderdate", "createdat", "timestamp"}:
+            rename_map[raw] = "order_date"
+        elif key in {"deliverystatus", "status"}:
+            rename_map[raw] = "delivery_status"
 
-    CREATE TABLE IF NOT EXISTS {SCHEMA}.orders (
-      order_id BIGINT PRIMARY KEY,
-      user_id BIGINT NOT NULL,
-      is_otd BOOLEAN,
-      order_date TIMESTAMP,
-      delivery_status TEXT
-    );
+    df = df.rename(columns=rename_map)
 
-    CREATE TABLE IF NOT EXISTS {SCHEMA}.crm (
-      order_id BIGINT PRIMARY KEY,
-      crm_delivery_request_count INT,
-      crm_fake_delivery_request_count INT,
-      customer_rate NUMERIC(4,2),
-      courier_rate NUMERIC(4,2),
-      CONSTRAINT fk_crm_order FOREIGN KEY(order_id) REFERENCES {SCHEMA}.orders(order_id)
-    );
+    cols = ["order_id", "user_id", "is_otd", "order_date", "delivery_status"]
+    for c in cols:
+        if c not in df.columns:
+            df[c] = ""
+    return df[cols].copy()
 
-    CREATE TABLE IF NOT EXISTS {SCHEMA}.comments (
-      order_id BIGINT PRIMARY KEY,
-      description TEXT,
-      CONSTRAINT fk_comments_order FOREIGN KEY(order_id) REFERENCES {SCHEMA}.orders(order_id)
-    );
 
-    -- Helpful indexes
-    CREATE INDEX IF NOT EXISTS idx_orders_user_date ON {SCHEMA}.orders(user_id, order_date);
-    CREATE INDEX IF NOT EXISTS idx_orders_date ON {SCHEMA}.orders(order_date);
-    """))
-    print("✅ Tables ensured / indexes created.")
+def _normalize_crm_columns(df: pd.DataFrame) -> pd.DataFrame:
+    rename_map = {}
+    for raw in df.columns:
+        key = re.sub(r"[^a-z]", "", raw.lower())
+        if key == "orderid":
+            rename_map[raw] = "order_id"
+        elif key in {"crmdeliveryrequestcount", "deliveryrequestcount", "deliveryrequests"}:
+            rename_map[raw] = "crm_delivery_request_count"
+        elif key in {"crmfakedeliveryrequestcount", "fakedeliveryrequestcount", "fakedeliveryrequests"}:
+            rename_map[raw] = "crm_fake_delivery_request_count"
+        elif key in {"customerrate", "customerrating", "shoprate", "shoprating", "ratecustomer", "ratingcustomer", "userrate", "userrating"}:
+            rename_map[raw] = "rate_to_shop"
+        elif key in {"courierrate", "courierrating", "driverrate", "driverrating", "riderrate", "riderrating"}:
+            rename_map[raw] = "rate_to_courier"
 
-    # TRUNCATE in dependency-safe order (children → parent)
-    conn.execute(text(f"TRUNCATE TABLE {SCHEMA}.crm, {SCHEMA}.comments, {SCHEMA}.orders;"))
-    print("🧹 Tables truncated.")
+    df = df.rename(columns=rename_map)
 
-# ------------------- INSERT (parent → children) -------------------
-for name, df in tqdm([('orders', orders), ('crm', crm), ('comments', comments)]):
-    if df.empty:
-        print(f"ℹ️ {name}: empty dataframe, skipping insert.")
-        continue
-    df.to_sql(name, engine, schema=SCHEMA, if_exists='append', index=False, method='multi', chunksize=100_000)
-    print(f"✅ Inserted {name} ({len(df)} rows)")
+    cols = ["order_id", "crm_delivery_request_count", "crm_fake_delivery_request_count", "rate_to_shop", "rate_to_courier"]
+    for c in cols:
+        if c not in df.columns:
+            df[c] = ""
+    return df[cols].copy()
 
-# ------------------- VERIFY COUNTS -------------------
-with engine.begin() as conn:
-    o_cnt = conn.execute(text(f"SELECT COUNT(*) FROM {SCHEMA}.orders")).scalar()
-    c_cnt = conn.execute(text(f"SELECT COUNT(*) FROM {SCHEMA}.crm")).scalar()
-    m_cnt = conn.execute(text(f"SELECT COUNT(*) FROM {SCHEMA}.comments")).scalar()
 
-print(f"🎉 Done. orders={o_cnt:,} | crm={c_cnt:,} | comments={m_cnt:,}")
+def _normalize_comments_columns(df: pd.DataFrame) -> pd.DataFrame:
+    rename_map = {}
+    for raw in df.columns:
+        key = re.sub(r"[^a-z]", "", raw.lower())
+        if key in {"orderid"}:
+            rename_map[raw] = "order_id"
+        elif key in {
+            "description", "comment", "comments", "text", "content",
+            "review", "reviews", "message", "feedback", "note", "notes",
+            "commenttext", "comment_body", "commentbody", "body"
+        }:
+            rename_map[raw] = "description"
+
+    df = df.rename(columns=rename_map)
+
+    cols = ["order_id", "description"]
+    for c in cols:
+        if c not in df.columns:
+            df[c] = ""
+    return df[cols].copy()
+
+
+def insert_orders(session: Session, df: pd.DataFrame) -> int:
+    df = _normalize_orders_columns(df)
+    total = 0
+    for i in range(0, len(df), CHUNK_SIZE):
+        chunk = df.iloc[i:i + CHUNK_SIZE]
+        if chunk.empty:
+            continue
+        payload = chunk.to_dict(orient="records")
+        session.execute(Orders.__table__.insert(), payload)
+        total += len(chunk)
+    return total
+
+
+def insert_crm(session: Session, df: pd.DataFrame) -> int:
+    df = _normalize_crm_columns(df)
+    total = 0
+    for i in range(0, len(df), CHUNK_SIZE):
+        chunk = df.iloc[i:i + CHUNK_SIZE]
+        if chunk.empty:
+            continue
+        payload = chunk.to_dict(orient="records")
+        session.execute(CRM.__table__.insert(), payload)
+        total += len(chunk)
+    return total
+
+
+def insert_comments(session: Session, df: pd.DataFrame) -> int:
+    df = _normalize_comments_columns(df)
+    total = 0
+    for i in range(0, len(df), CHUNK_SIZE):
+        chunk = df.iloc[i:i + CHUNK_SIZE]
+        if chunk.empty:
+            continue
+        payload = chunk.to_dict(orient="records")
+        session.execute(Comments.__table__.insert(), payload)
+        total += len(chunk)
+    return total
+
+
+def print_table_counts(session: Session):
+    for tbl in ["orders", "crm", "comments"]:
+        res = session.execute(text(f'SELECT COUNT(*) FROM "{SCHEMA}"."{tbl}"'))
+        print(f"📦 {tbl} rows in DB: {res.scalar_one()}")
+
+
+def main():
+    db_url = f"postgresql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+    print(f"Connecting to: {db_url} (schema={SCHEMA})")
+
+    engine = create_engine(db_url, echo=ECHO_SQL, future=True, pool_pre_ping=True)
+
+    with engine.begin() as conn:
+        conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {SCHEMA}"))
+        conn.execute(text(f"SET search_path TO {SCHEMA}"))
+        Base.metadata.create_all(conn)
+
+    print("Reading CSVs...")
+    orders_df = _read_csv_verbatim(orders_csv)
+    crm_df = _read_csv_verbatim(crm_csv)
+    comments_df = _read_csv_verbatim(comments_csv)
+
+    with Session(engine) as session:
+        session.execute(text(f"SET search_path TO {SCHEMA}"))
+
+        print("Inserting orders...")
+        n_orders = insert_orders(session, orders_df)
+        session.commit()
+        print(f"Orders inserted: {n_orders}")
+        print_table_counts(session)
+
+        print("Inserting CRM...")
+        n_crm = insert_crm(session, crm_df)
+        session.commit()
+        print(f"CRM inserted: {n_crm}")
+        print_table_counts(session)
+
+        print("Inserting comments...")
+        n_comments = insert_comments(session, comments_df)
+        session.commit()
+        print(f"Comments inserted: {n_comments}")
+        print_table_counts(session)
+
+        print("✅ All rows inserted (no skips).")
+
+
+if __name__ == "__main__":
+    main()
