@@ -1,55 +1,26 @@
-services:
-  db:
-    image: postgres:15
-    container_name: churn_pg
-    environment:
-      POSTGRES_DB: sn_dehghani
-      POSTGRES_USER: sn_dehghani
-      POSTGRES_PASSWORD: sndi
-    ports:
-      - "8000:5432"             # Host 8000 -> container 5432 (matches your local habit)
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U sn_dehghani -d sn_dehghani"]
-      interval: 5s
-      timeout: 3s
-      retries: 1
-    restart: unless-stopped
+# docker-compose.yml — API uses your host DB on localhost:8000
 
+services:
   api:
-    build:
-      context: .               # Directory containing Dockerfile and the app/ folder
-      dockerfile: Dockerfile
+    build: .
     container_name: churn_api
-    depends_on:
-      db:
-        condition: service_healthy
     environment:
-      # ---- DB connection (API talks to the Compose postgres service) ----
+      # --- DB connection (to your host Postgres) ---
+      DB_HOST: host.docker.internal   # macOS/Windows: built-in DNS to host
+      DB_PORT: "8000"                 # your training DB's non-standard port
       DB_USER: sn_dehghani
       DB_PASS: sndi
-      DB_HOST: db              # service name = hostname inside the Compose network
-      DB_PORT: "5432"          # container port for postgres service
       DB_NAME: sn_dehghani
       DB_SCHEMA: public
       FEATURE_TABLE: final_features
-      TARGET_COL: label
 
-      # ---- Model artifacts ----
-      ARTIFACT_DIR: /artifacts # absolute path inside container
+      # --- Model settings ---
       SEQ_LEN: "6"
+      ARTIFACT_DIR: /app/artifacts
     ports:
-      - "8001:8001"
+      - "8080:8080"                   # FastAPI -> http://localhost:8080
     volumes:
-      # Left side: host path to your artifacts directory (adjust if different)
-      - ./notebooks/artifacts:/artifacts:ro
-    healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:8001/health || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-    restart: unless-stopped
-
-volumes:
-  pgdata:
+      - ./notebooks/artifacts:/app/artifacts:ro
+    # If you're on Linux, uncomment to reach the host:
+    # extra_hosts:
+    #   - "host.docker.internal:host-gateway"
