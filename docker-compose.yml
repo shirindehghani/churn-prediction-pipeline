@@ -1,35 +1,44 @@
 version: "3.9"
+
 services:
   db:
     image: postgres:16
+    container_name: churn_db
     environment:
-      POSTGRES_USER: ${DB_USER:-sn_dehghani}
-      POSTGRES_PASSWORD: ${DB_PASS:-sndi}
-      POSTGRES_DB: ${DB_NAME:-sn_dehghani}
+      POSTGRES_USER: sn_dehghani
+      POSTGRES_PASSWORD: sndi
+      POSTGRES_DB: sn_dehghani
     ports:
-      - "8000:8000"
+      - "8000:5432"            # host:container (DB reachable on localhost:8000)
     volumes:
-      - pgdata:/var/lib/postgresql/data
-      # seed script if you have one:
-      # - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sn_dehghani -d sn_dehghani"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   api:
     build: .
+    container_name: churn_api
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     environment:
-      DB_USER: ${DB_USER:-sn_dehghani}
-      DB_PASS: ${DB_PASS:-sndi}
+      # IMPORTANT: inside the compose network, use the service name "db" and port 5432
       DB_HOST: db
-      DB_PORT: "8000"
-      DB_NAME: ${DB_NAME:-sn_dehghani}
-      DB_SCHEMA: ${DB_SCHEMA:-public}
-      FEATURE_TABLE: ${FEATURE_TABLE:-final_features}
-      ARTIFACT_DIR: /app/artifacts
+      DB_PORT: "5432"
+      DB_USER: sn_dehghani
+      DB_PASS: sndi
+      DB_NAME: sn_dehghani
+      DB_SCHEMA: public
+      FEATURE_TABLE: final_features
+      # Mount artifacts into /artifacts and point the app there
+      ARTIFACT_DIR: /artifacts
     ports:
-      - "8001:8001"
+      - "8001:8001"            # host:container (API reachable on localhost:8001)
     volumes:
-      - ./artifacts:/app/artifacts:ro
+      - ./notebooks/artifacts:/artifacts:ro  # model files from your repo
 
 volumes:
-  pgdata:
+  db-data:
