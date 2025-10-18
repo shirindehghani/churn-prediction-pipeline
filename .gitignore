@@ -2,7 +2,7 @@
 /venv/
 /data/
 
-__pycache__/
+**__pycache__**/
 
 notebooks/artifacts/
 
