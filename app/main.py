@@ -8,6 +8,9 @@ import pandas as pd
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import create_engine, text
+from dotenv import load_dotenv
+
+load_dotenv()
 
 import joblib
 
@@ -19,11 +22,11 @@ except Exception:
     TORCH_AVAILABLE = False
 
 
-DB_USER = os.getenv("DB_USER", "sn_dehghani")
-DB_PASS = os.getenv("DB_PASS", "sndi")
-DB_HOST = os.getenv("DB_HOST", "db")
-DB_PORT = os.getenv("DB_PORT", "5432")
-DB_NAME = os.getenv("DB_NAME", "sn_dehghani")
+DB_USER = os.getenv("DB_USER")
+DB_PASS = os.getenv("DB_PASS")
+DB_HOST = os.getenv("DB_HOST")
+DB_PORT = os.getenv("DB_PORT")
+DB_NAME = os.getenv("DB_NAME")
 DB_SCHEMA = os.getenv("DB_SCHEMA", "public")
 TABLE = os.getenv("FEATURE_TABLE", "final_features")
 SEQ_LEN = int(os.getenv("SEQ_LEN", "6"))
