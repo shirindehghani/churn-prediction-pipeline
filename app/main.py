@@ -35,7 +35,8 @@ KEY_COLS = ["user_id", "month_start"]
 
 SEQ_LEN = int(os.getenv("SEQ_LEN", "6"))
 
-BASE_DIR = Path(__file__).resolve().parent  # /app/app inside the container
+# BASE_DIR resolves to .../repo-root/app (both locally and in the container)
+BASE_DIR = Path(__file__).resolve().parent
 # NOTE: ARTIFACT_DIR can be provided by env. We resolve robustly below.
 ARTIFACT_DIR_ENV = os.getenv("ARTIFACT_DIR", "").strip()
 
@@ -68,15 +69,16 @@ def dir_has_required_files(p: Path) -> bool:
 def resolve_artifact_dir() -> Path:
     """
     Pick the artifact directory in a robust order:
-    1) Explicit ARTIFACT_DIR env (absolute or relative to CWD)
+    1) Explicit ARTIFACT_DIR env (absolute or relative to CWD; '~' expanded)
     2) /artifacts (docker-compose volume mount)
-    3) BASE_DIR/../notebooks/artifacts  (repo layout when running locally)
+    3) BASE_DIR/../notebooks/artifacts  (your repo layout)
     4) BASE_DIR/artifacts                (fallback)
     """
     candidates: List[Path] = []
 
     if ARTIFACT_DIR_ENV:
-        candidates.append(Path(ARTIFACT_DIR_ENV).resolve())
+        # allow "~" and relative paths
+        candidates.append(Path(os.path.expanduser(ARTIFACT_DIR_ENV)).resolve())
 
     candidates.append(Path("/artifacts"))  # compose mount
     candidates.append((BASE_DIR.parent / "notebooks" / "artifacts").resolve())
@@ -99,6 +101,20 @@ def resolve_artifact_dir() -> Path:
         "  • Ensure repo layout has notebooks/artifacts with the files."
     )
     raise RuntimeError(msg)
+
+# -----------------------------
+# Helper: resolve paths from best_model_info.json
+# -----------------------------
+def resolve_path_from_artifacts(p: str | None, artifacts_dir: Path) -> Path | None:
+    """
+    If p is absolute -> return Path(p).
+    If p is relative -> return artifacts_dir / p.
+    If p is None/empty -> return None.
+    """
+    if not p:
+        return None
+    pth = Path(p)
+    return pth if pth.is_absolute() else (artifacts_dir / pth)
 
 # -----------------------------
 # DB helpers
@@ -196,12 +212,12 @@ def load_artifacts():
 
     # Pick and validate artifacts directory
     ARTIFACT_DIR = resolve_artifact_dir()
+
     # Load meta
     with open(ARTIFACT_DIR / "best_model_info.json") as f:
         info = json.load(f)
     MODEL_NAME = info.get("best_model", "unknown")
     THRESHOLD = float(info.get("threshold", 0.5))
-    MODEL_PATH = info.get("model_path")
 
     # Determine type from name
     name = (MODEL_NAME or "").lower()
@@ -216,21 +232,28 @@ def load_artifacts():
     with open(ARTIFACT_DIR / "feature_columns.json") as f:
         FEATURE_COLS = json.load(f)
 
+    # Resolve any optional paths from the info (absolute-safe)
+    MODEL_PATH = resolve_path_from_artifacts(info.get("model_path"), ARTIFACT_DIR)
+    PREPROC_PATH_INFO = resolve_path_from_artifacts(info.get("preprocessor_path"), ARTIFACT_DIR)
+
     # Load model
     if MODEL_TYPE == "sklearn":
-        pkl_path = Path(MODEL_PATH) if MODEL_PATH else (ARTIFACT_DIR / "model_best.pkl")
+        pkl_path = MODEL_PATH or (ARTIFACT_DIR / "model_best.pkl")
         if not pkl_path.exists():
             raise RuntimeError(f"Missing sklearn model file at: {pkl_path}")
         MODEL = joblib.load(pkl_path)
         PREPROC = None
+
     else:
         if not TORCH_AVAILABLE:
             raise RuntimeError("Torch model selected but PyTorch is not installed/available.")
         # pick device; in docker CPU is typical
-        DEVICE = "cuda" if torch.cuda.is_available() else ("mps" if hasattr(torch.backends, "mps") and torch.backends.mps.is_available() else "cpu")
+        DEVICE = "cuda" if torch.cuda.is_available() else (
+            "mps" if hasattr(torch.backends, "mps") and torch.backends.mps.is_available() else "cpu"
+        )
 
-        pt_path = Path(MODEL_PATH) if MODEL_PATH else (ARTIFACT_DIR / "model_best_torch.pt")
-        preproc_path = Path(info.get("preprocessor_path")) if info.get("preprocessor_path") else (ARTIFACT_DIR / "preprocessing_pipeline.pkl")
+        pt_path = MODEL_PATH or (ARTIFACT_DIR / "model_best_torch.pt")
+        preproc_path = PREPROC_PATH_INFO or (ARTIFACT_DIR / "preprocessing_pipeline.pkl")
         if not pt_path.exists():
             raise RuntimeError(f"Missing torch model state_dict at: {pt_path}")
         if not preproc_path.exists():

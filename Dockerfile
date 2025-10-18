@@ -1,58 +1,45 @@
+# Dockerfile
 FROM python:3.11-slim
 
-ENV PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# System deps:
-# - libpq-dev: psycopg2
-# - build-essential,gcc: wheels fallback/compilation (safe to keep)
-# - curl: useful for container healthchecks
-# - libgomp1: REQUIRED by xgboost runtime (libgomp.so.1)
+# System deps for psycopg2 and numpy/pandas builds
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    gcc \
-    libpq-dev \
-    libgomp1 \
-    curl \
+    build-essential gcc libpq-dev curl \
  && rm -rf /var/lib/apt/lists/*
 
-# Python deps (Torch CPU so torch models can run in container)
-RUN pip install --no-cache-dir \
-    fastapi \
-    "uvicorn[standard]" \
-    numpy \
-    pandas \
-    scikit-learn \
-    joblib \
-    "SQLAlchemy>=2.0" \
-    psycopg2-binary \
-    pydantic \
-    xgboost \
- && pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cpu \
-    torch torchvision torchaudio
+# If you have a requirements.txt, great. Otherwise inline install below.
+COPY requirements.txt /app/requirements.txt
 
-# Copy your API package (main.py is inside app/)
-COPY ./app /app/app
+# ----- If you don't have a requirements.txt, comment the line above
+# and uncomment the block below
+# RUN pip install --no-cache-dir \
+#     fastapi uvicorn[standard] \
+#     sqlalchemy psycopg2-binary \
+#     pandas numpy scikit-learn joblib \
+#     # torch is optional; install only if you need torch_* models
+#     # torch==2.4.1+cpu --extra-index-url https://download.pytorch.org/whl/cpu
+#     && true
 
-# Optional: keep repo root on import path (handy if you add local packages later)
-ENV PYTHONPATH=/app
+RUN pip install --no-cache-dir -r /app/requirements.txt
 
-# Fail fast if the module path is wrong (build will error immediately)
-RUN python - <<'PY'
-import importlib
-import sys
-m = importlib.import_module('app.main')
-print("OK: imported", m.__name__)
-PY
+# Copy your app code
+# Tree on host:
+# repo-root/
+#   app/
+#     main.py
+#   notebooks/
+#     artifacts/...
+COPY app/ /app/app/
 
-# Non-root user
-RUN useradd -m appuser
-USER appuser
+# --------- OPTION A (volume mount; recommended) ----------
+# Do NOT copy artifacts here. We’ll mount them at runtime to /artifacts.
+# Leave the next line commented:
+# COPY notebooks/artifacts/ /artifacts/
 
-EXPOSE 8001
+EXPOSE 8000
 
-# main.py lives in app/, so use app.main:app
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001", "--workers", "1"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
