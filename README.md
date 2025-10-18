@@ -113,3 +113,9 @@ Run the following script to create the database schema and load the raw CSVs:
 
 ```bash
 python load_to_postgres.py
+```
+
+This script will:
+- Connect to the Postgres database
+- Create relational tables for orders, crm, and comments
+- Insert all raw records into their respective tables
