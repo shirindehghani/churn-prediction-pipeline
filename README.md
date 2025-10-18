@@ -151,6 +151,8 @@ This script:
 - Aggregates data at the user level
 - Generates the final labeled dataset for churn prediction
 
+
+### !!! All Schemas are in these 3 files !!!
 ---
 
 ## 📈 Modeling & Evaluation
@@ -222,5 +224,16 @@ Install all dependencies locally (if not using Docker):
 pip install -r requirements.txt
 ```
 
+---
+
+Sample input is:
+```bash
+curl -X POST http://localhost:8080/predict -H "Content-Type: application/json" -d '{"user_id":"10000115"}' | jq
+```
+---
+
+The port for database has selected `8000`, for FastAPI has selected `8080`.
+
+---
 
 @Author : Shirin Dehghani/ AI Engineer
