@@ -15,13 +15,17 @@ from sqlalchemy import (
     Index,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, Session
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
 
 
-DB_USER = "sn_dehghani"
-DB_PASS = "sndi"
-DB_HOST = "localhost"
-DB_PORT = "8000"
-DB_NAME = "sn_dehghani"
+DB_USER = os.getenv("DB_USER")
+DB_PASS = os.getenv("DB_PASS")
+DB_HOST = os.getenv("DB_HOST")
+DB_PORT = os.getenv("DB_PORT")
+DB_NAME = os.getenv("DB_NAME")
 SCHEMA  = "public"
 
 orders_csv   = "./data/orders.csv"
