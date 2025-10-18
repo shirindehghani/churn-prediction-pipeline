@@ -9,6 +9,8 @@ A complete end-to-end **data science and engineering pipeline** to predict custo
 <!-- `**bold**` emphasizes keywords -->
 This project includes data ingestion, transformation, feature engineering, model training, and API deployment using **FastAPI** and **Docker Compose**.
 
+Note that you should create `.env` file like `sample.env`
+
 ---
 
 <!-- ========================================================= -->
