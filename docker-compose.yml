@@ -1,44 +1,50 @@
-version: "3.9"
-
 services:
   db:
-    image: postgres:16
-    container_name: churn_db
+    image: postgres:15
+    container_name: churn_pg
     environment:
+      POSTGRES_DB: sn_dehghani
       POSTGRES_USER: sn_dehghani
       POSTGRES_PASSWORD: sndi
-      POSTGRES_DB: sn_dehghani
     ports:
-      - "8000:5432"            # host:container (DB reachable on localhost:8000)
+      - "8000:5432"          # exposes PG on host:8000
     volumes:
-      - db-data:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U sn_dehghani -d sn_dehghani"]
       interval: 5s
       timeout: 3s
-      retries: 10
+      retries: 20
 
   api:
-    build: .
+    build:
+      context: .             # directory that contains Dockerfile and the app/ folder
+      dockerfile: Dockerfile
     container_name: churn_api
     depends_on:
       db:
         condition: service_healthy
     environment:
-      # IMPORTANT: inside the compose network, use the service name "db" and port 5432
-      DB_HOST: db
-      DB_PORT: "5432"
       DB_USER: sn_dehghani
       DB_PASS: sndi
+      DB_HOST: db
+      DB_PORT: "5432"        # inside compose, DB is on default 5432
       DB_NAME: sn_dehghani
       DB_SCHEMA: public
       FEATURE_TABLE: final_features
-      # Mount artifacts into /artifacts and point the app there
+      TARGET_COL: label
       ARTIFACT_DIR: /artifacts
+      SEQ_LEN: "6"
     ports:
-      - "8001:8001"            # host:container (API reachable on localhost:8001)
+      - "8001:8001"
     volumes:
-      - ./notebooks/artifacts:/artifacts:ro  # model files from your repo
+      # mount artifacts from your repo (adjust left path if different)
+      - ./notebooks/artifacts:/artifacts:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8001/health || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
 
 volumes:
-  db-data:
+  pgdata:

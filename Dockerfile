@@ -1,28 +1,41 @@
-# Use Python 3.10 (works with your type hints and libs)
-FROM python:3.10-slim
+FROM python:3.11-slim
 
-# Helpful runtime settings
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
-
-# XGBoost needs libgomp, keep image slim otherwise
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libgomp1 \
- && rm -rf /var/lib/apt/lists/*
+ENV PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PYTHONDONTWRITEBYTECODE=1
 
 WORKDIR /app
 
-# Install dependencies (add xgboost because your model pipeline mentions it)
+# System deps (for psycopg2 + science stack)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential gcc libpq-dev curl \
+ && rm -rf /var/lib/apt/lists/*
+
+# Python deps (API + ML). Torch CPU so torch models work inside container.
 RUN pip install --no-cache-dir \
-    fastapi uvicorn[standard] \
-    sqlalchemy psycopg2-binary \
-    pandas numpy scikit-learn joblib xgboost
+    fastapi \
+    "uvicorn[standard]" \
+    numpy \
+    pandas \
+    scikit-learn \
+    joblib \
+    "SQLAlchemy>=2.0" \
+    psycopg2-binary \
+    pydantic \
+    xgboost \
+ && pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cpu \
+    torch torchvision torchaudio
 
-# Copy your app code (assumes your main.py lives in ./app/)
-COPY app/ /app/app/
+# Copy only the app/ directory (your main.py is inside here)
+COPY ./app /app/app
 
-# Expose API port (container-side)
+# Optional: keep repo root on import path, handy if you add packages later
+ENV PYTHONPATH=/app
+
+# Non-root
+RUN useradd -m appuser
+USER appuser
+
 EXPOSE 8001
-
-# Run the API (bind to all interfaces for container networking)
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001"]
+# NOTE: main.py is inside app/, so the module path is app.main:app
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001", "--workers", "1"]

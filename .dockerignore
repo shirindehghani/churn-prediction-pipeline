@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Git / IDE
+.git/
+.gitignore
+*.egg-info/
+.idea/
+.vscode/
+
+# Large folders you’ll bind-mount anyway
+notebooks/
+data/
+tmp/
+logs/
+artifacts/
