@@ -47,7 +47,7 @@ CHURN-PIPELINE/
 ├── Dockerfile # FastAPI service Docker image
 ├── .dockerignore
 ├── .gitignore
-
+```
 <!-- Triple backticks with no language specified render monospaced directory trees -->
 
 ---
