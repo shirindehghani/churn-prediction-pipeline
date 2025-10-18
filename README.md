@@ -121,3 +121,104 @@ This script will:
 - Insert all raw records into their respective tables
 
 ---
+
+### Step 2: Generate Sentiment and Other Features
+
+After data is loaded, generate text sentiment and other derived features:
+
+```bash
+python sentiment_features_to_postgres.py
+```
+
+This script:
+- Extracts textual sentiment features (e.g., polarity, subjectivity)
+- Saves these features into a new database table linked by order_id
+
+---
+
+### Step 3: Create Final Feature Set
+
+Finally, prepare the dataset for model training:
+
+```bash
+python final_features.py
+```
+
+This script:
+- Merges CRM, order, and sentiment features
+- Aggregates data at the user level
+- Generates the final labeled dataset for churn prediction
+
+---
+
+## 📈 Modeling & Evaluation
+
+Explore and train models using the provided notebooks:
+```bash
+python EDA_Feature_Engineering.ipynb
+```
+
+- Perform exploratory data analysis
+- Engineer temporal, behavioral, and satisfaction-based features
+- Define churn (e.g., no order in next month)
+
+```bash
+python Train_Models.ipynb
+```
+
+- Train and evaluate churn prediction models (e.g., Logistic Regression, XGBoost)
+- Use evaluation metrics such as AUC, Precision/Recall, and F1-score
+- Interpret model results and identify churn drivers
+
+---
+
+## 🚀 API Endpoint
+A RESTful API is built using FastAPI in `app/main.py`.
+
+#### Endpoint
+```bash
+POST /predict
+```
+
+---
+
+#### Input
+```bash
+{
+    "user_id": 12345
+    }
+```
+
+---
+
+### Output
+```bash
+{
+  "user_id": 12345,
+  "will_churn": "yes",
+  "churn_probability": 0.82
+}
+```
+
+---
+
+## 🐳 Docker Deployment
+
+The project includes a complete Docker setup for local development.
+
+```bash
+docker-compose up --build
+```
+
+---
+
+## ⚙️ Requirements
+
+Install all dependencies locally (if not using Docker):
+
+```bash
+pip install -r requirements.txt
+```
+
+
+@Author : Shirin Dehghani/ AI Engineer
