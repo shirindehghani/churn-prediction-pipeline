@@ -6,3 +6,5 @@ scikit-learn==1.5.2
 SQLAlchemy==2.0.32
 psycopg2-binary==2.9.9
 joblib==1.4.2
+transformers
+torch
