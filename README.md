@@ -6,7 +6,7 @@ This project includes data ingestion, transformation, feature engineering, model
 ---
 
 ## 📁 Project Structure
-
+```
 CHURN-PIPELINE/
 │
 ├── app/
