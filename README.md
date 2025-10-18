@@ -79,67 +79,64 @@ The goal is to **predict whether a user will churn next month** based on histori
 
 Run the following script to create the database schema and load the raw CSVs:
 
-```bash
+```
 python load_to_postgres.py
 
 This script will:
+- Connect to the Postgres database
+- Create relational tables for orders, crm, and comments
+- Insert all raw records into their respective tables
 
-Connect to the Postgres database
+---
 
-Create relational tables for orders, crm, and comments
-
-Insert all raw records into their respective tables
-
-Step 2: Generate Sentiment and other Features
+### Step 2: Generate Sentiment and other Features
 After data is loaded, generate text sentiment and other derived features:
 ```
 python sentiment_features_to_postgres.py
-```
 
 This script:
+- Extracts textual sentiment features (e.g., polarity, subjectivity)
+- Saves these features into a new database table linked by order_id
 
-Extracts textual sentiment features (e.g., polarity, subjectivity)
+---
 
-Saves these features into a new database table linked by order_id
-
-Step 3: Create Final Feature Set
+### Step 3: Create Final Feature Set
 
 Finally, prepare the dataset for model training:
 ```
 python final_features.py
-```
+
 This script:
+- Merges CRM, order, and sentiment features
+- Aggregates data at the user level
+- Generates the final labeled dataset for churn prediction
 
-Merges CRM, order, and sentiment features
-
-Aggregates data at the user level
-
-Generates the final labeled dataset for churn prediction
 ---
-📈 Modeling & Evaluation
+
+## 📈 Modeling & Evaluation
 
 Explore and train models using the provided notebooks:
-
+```
 EDA_Feature_Engineering.ipynb
 
-Perform exploratory data analysis
+- Perform exploratory data analysis
+- Engineer temporal, behavioral, and satisfaction-based features
+- Define churn (e.g., no order in next month)
 
-Engineer temporal, behavioral, and satisfaction-based features
-
-Define churn (e.g., no order in next month)
-
+```
 Train_Models.ipynb
 
-Train and evaluate churn prediction models (e.g., Logistic Regression, XGBoost)
+- Train and evaluate churn prediction models (e.g., Logistic Regression, XGBoost)
+- Use evaluation metrics such as AUC, Precision/Recall, and F1-score
+- Interpret model results and identify churn drivers
 
-Use evaluation metrics such as AUC, Precision/Recall, and F1-score
-
-Interpret model results and identify churn drivers
 ---
-A RESTful API is built using FastAPI in app/main.py.
+
+A RESTful API is built using FastAPI in `app/main.py`.
 
 Endpoint
 
+```
 POST /predict
 
 Input:
@@ -155,24 +152,27 @@ Output:
   "will_churn": "yes",
   "churn_probability": 0.82
 }
-```
+
 ---
-🐳 Docker Deployment
+
+## 🐳 Docker Deployment
 
 The project includes a complete Docker setup for local development.
 
 1. Build and Run Containers
 ```
 docker-compose up --build
-```
+
 ---
-3. Test the API
+
+2. Test the API
 
 Visit http://localhost:8000/docs
  for the interactive Swagger UI.
 
 ---
-⚙️ Requirements
+
+## ⚙️ Requirements
 
 Install all dependencies locally (if not using Docker):
 ```
