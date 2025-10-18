@@ -206,7 +206,6 @@ with engine.begin() as con:
 print("✅ Base features created in public.features")
 
 
-# Pull comments with valid order timestamps (for user & month)
 regex_iso = r"^\d{4}-\d{2}-\d{2}([ T]\d{2}:\d{2}(:\d{2})?)?$"
 limit_clause = f"LIMIT {int(ROW_LIMIT)}" if ROW_LIMIT is not None else ""
 
@@ -283,7 +282,6 @@ print(f"Loading HF model: {MODEL_NAME}")
 tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 model     = AutoModelForSequenceClassification.from_pretrained(MODEL_NAME)
 
-# Auto-select device: prefer CUDA, then MPS (Apple Silicon), else CPU
 device_desc = "cpu"
 use_pipeline_device = -1
 
@@ -310,7 +308,6 @@ pipe = TextClassificationPipeline(
     device=use_pipeline_device,
 )
 
-# Detect which label is positive/negative(/neutral)
 def detect_label_map(pipeline: TextClassificationPipeline):
     try:
         good = pipeline(["خیلی خوب"])[0]

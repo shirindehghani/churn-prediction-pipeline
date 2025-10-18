@@ -1,16 +1,13 @@
 from __future__ import annotations
 from sqlalchemy import create_engine, text
 
-# ---------- DB CONFIG ----------
 DB_USER = "sn_dehghani"
 DB_PASS = "sndi"
 DB_HOST = "localhost"
-DB_PORT = "8000"   # change to 5432 if that's your Postgres port
+DB_PORT = "8000"
 DB_NAME = "sn_dehghani"
 SCHEMA  = "public"
 
-# If you prefer month-bucket matching (any timestamp inside the month),
-# set MATCH_BY_MONTH = True. Otherwise we'll cast both sides to DATE.
 MATCH_BY_MONTH = False
 
 SENTIMENT_COLS = {
@@ -35,12 +32,10 @@ def get_features_columns(engine):
 def _join_condition():
     """Return the ON clause that robustly matches month_start."""
     if MATCH_BY_MONTH:
-        # Align by month bucket
         return (
             "s.user_id = f.user_id "
             "AND date_trunc('month', s.month_start) = date_trunc('month', f.month_start)"
         )
-    # Align by exact date (casts remove time/tz parts if present)
     return "s.user_id = f.user_id AND s.month_start::date = f.month_start::date"
 
 def _select_list_with_coalesce(base_cols):
@@ -58,7 +53,6 @@ def _diagnostics(engine):
     """Print a few useful diagnostics before (re)building the table."""
     print("🧪 Running diagnostics …")
     with engine.begin() as con:
-        # 1) Do we have any non-NULL sentiment values available?
         diag1 = con.execute(text(f"""
             SELECT
               COUNT(*)                                  AS rows_in_s,
@@ -74,7 +68,6 @@ def _diagnostics(engine):
               f"pos:{diag1['cnt_pos_nonnull']}, neg:{diag1['cnt_neg_nonnull']}, "
               f"neu:{diag1['cnt_neu_nonnull']}, comp:{diag1['cnt_comp_nonnull']}")
 
-        # 2) How many rows will match under our join condition?
         join_on = _join_condition()
         diag2 = con.execute(text(f"""
             SELECT
@@ -87,17 +80,14 @@ def _diagnostics(engine):
         print(f"   • features rows: {diag2['total_f']}, rows with match: {diag2['matched_rows']}")
 
 def rebuild_final_features(engine):
-    # 1) Inspect columns and exclude any that collide with sentiment columns
     feat_cols = get_features_columns(engine)
     if "user_id" not in feat_cols or "month_start" not in feat_cols:
         raise SystemExit("❌ public.features must contain 'user_id' and 'month_start' columns.")
 
     base_cols = [c for c in feat_cols if c not in SENTIMENT_COLS]
 
-    # 2) Optional diagnostics to confirm matches/non-NULLs
     _diagnostics(engine)
 
-    # 3) Build SQL
     select_list = _select_list_with_coalesce(base_cols)
     join_on = _join_condition()
 
@@ -112,13 +102,13 @@ def rebuild_final_features(engine):
       ON {join_on};
     """
 
-    # 4) Execute DROP + CREATE
+
     print("🔄 Rebuilding public.final_features …")
     with engine.begin() as con:
         con.execute(text(create_sql))
     print("✅ final_features created")
 
-    # 5) Try to add PK; if duplicates exist, create a non-unique index instead
+    
     try:
         with engine.begin() as con:
             con.execute(text(f"""

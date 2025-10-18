@@ -1,7 +1,10 @@
 .env*
 /venv/
 /data/
-/notebooks/artifacts/
+
+**__pycache__
+
+notebooks/artifacts/
 
 /notebooks/.ipynb_checkpoints/
 

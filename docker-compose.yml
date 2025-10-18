@@ -7,7 +7,7 @@ services:
       POSTGRES_USER: sn_dehghani
       POSTGRES_PASSWORD: sndi
     ports:
-      - "8000:5432"          # exposes PG on host:8000
+      - "8000:5432"             # Host 8000 -> container 5432 (matches your local habit)
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -15,36 +15,41 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+    restart: unless-stopped
 
   api:
     build:
-      context: .             # directory that contains Dockerfile and the app/ folder
+      context: .               # Directory containing Dockerfile and the app/ folder
       dockerfile: Dockerfile
     container_name: churn_api
     depends_on:
       db:
         condition: service_healthy
     environment:
+      # ---- DB connection (API talks to the Compose postgres service) ----
       DB_USER: sn_dehghani
       DB_PASS: sndi
-      DB_HOST: db
-      DB_PORT: "5432"        # inside compose, DB is on default 5432
+      DB_HOST: db              # service name = hostname inside the Compose network
+      DB_PORT: "5432"          # container port for postgres service
       DB_NAME: sn_dehghani
       DB_SCHEMA: public
       FEATURE_TABLE: final_features
       TARGET_COL: label
-      ARTIFACT_DIR: /artifacts
+
+      # ---- Model artifacts ----
+      ARTIFACT_DIR: /artifacts # absolute path inside container
       SEQ_LEN: "6"
     ports:
       - "8001:8001"
     volumes:
-      # mount artifacts from your repo (adjust left path if different)
+      # Left side: host path to your artifacts directory (adjust if different)
       - ./notebooks/artifacts:/artifacts:ro
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8001/health || exit 1"]
       interval: 10s
-      timeout: 3s
+      timeout: 5s
       retries: 10
+    restart: unless-stopped
 
 volumes:
   pgdata:
