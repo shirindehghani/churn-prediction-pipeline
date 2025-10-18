@@ -11,4 +11,7 @@ scikit-learn==1.5.2
 
 torch==2.3.1
 xgboost
-dotenv
+python-dotenv
+matplotlib
+transformers
+torch
