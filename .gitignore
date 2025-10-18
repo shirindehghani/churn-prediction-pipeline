@@ -1,28 +1,12 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
-# dependencies
-/node_modules
-/wallets
-/.pnp
-.pnp.js
 .env*
 /venv/
 /data/
-/notebooks/
+/notebooks/artifacts/
 
-# testing
-/coverage
+/notebooks/.ipynb_checkpoints/
 
-# production
-/build
-
-# misc
 .DS_Store
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
-
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
