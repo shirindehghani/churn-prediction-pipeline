@@ -11,7 +11,6 @@ from sqlalchemy import create_engine, text
 
 import joblib
 
-# Torch is only needed if your best model is a torch model
 try:
     import torch
     from torch import nn
@@ -19,13 +18,11 @@ try:
 except Exception:
     TORCH_AVAILABLE = False
 
-# ---------------------------
-# Config (env-first, with sensible defaults)
-# ---------------------------
+
 DB_USER = os.getenv("DB_USER", "sn_dehghani")
 DB_PASS = os.getenv("DB_PASS", "sndi")
-DB_HOST = os.getenv("DB_HOST", "db")  # docker-compose service name
-DB_PORT = os.getenv("DB_PORT", "5432")  # compose maps host:8000 -> container:5432
+DB_HOST = os.getenv("DB_HOST", "db")
+DB_PORT = os.getenv("DB_PORT", "5432")
 DB_NAME = os.getenv("DB_NAME", "sn_dehghani")
 DB_SCHEMA = os.getenv("DB_SCHEMA", "public")
 TABLE = os.getenv("FEATURE_TABLE", "final_features")
@@ -33,9 +30,9 @@ SEQ_LEN = int(os.getenv("SEQ_LEN", "6"))
 
 ARTIFACT_DIR = os.getenv("ARTIFACT_DIR", "/app/artifacts")
 BEST_INFO_PATH = os.path.join(ARTIFACT_DIR, "best_model_info.json")
-MODEL_PKL_PATH = os.path.join(ARTIFACT_DIR, "model_best.pkl")             # sklearn
-MODEL_TORCH_PATH = os.path.join(ARTIFACT_DIR, "model_best_torch.pt")      # torch
-PREPROC_PATH = os.path.join(ARTIFACT_DIR, "preprocessing_pipeline.pkl")   # torch models
+MODEL_PKL_PATH = os.path.join(ARTIFACT_DIR, "model_best.pkl")
+MODEL_TORCH_PATH = os.path.join(ARTIFACT_DIR, "model_best_torch.pt")
+PREPROC_PATH = os.path.join(ARTIFACT_DIR, "preprocessing_pipeline.pkl")
 FEATURE_COLS_PATH = os.path.join(ARTIFACT_DIR, "feature_columns.json")
 
 TARGET_COL = "label"
@@ -43,9 +40,6 @@ KEY_COLS = ["user_id", "month_start"]
 
 DB_URL = f"postgresql+psycopg2://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
-# ---------------------------
-# FastAPI init
-# ---------------------------
 app = FastAPI(title="Churn Prediction API", version="1.0.0")
 
 class PredictIn(BaseModel):
@@ -58,9 +52,7 @@ class PredictOut(BaseModel):
     threshold: float
     model: str
 
-# ---------------------------
-# Small helpers
-# ---------------------------
+
 def get_engine():
     return create_engine(DB_URL)
 
@@ -91,10 +83,8 @@ def load_artifacts():
         if not os.path.exists(PREPROC_PATH):
             raise RuntimeError("Expected preprocessing pipeline at artifacts/preprocessing_pipeline.pkl")
         preproc = joblib.load(PREPROC_PATH)
-        # Build a tiny head-only class to load state into (architecture must match your training code)
         if best_model_name == "torch_mlp":
-            # infer input dim from preproc.transform shape by a dry run later
-            model = _load_mlp_model_state(MODEL_TORCH_PATH, in_dim=None)  # will rebuild after we know in_dim
+            model = _load_mlp_model_state(MODEL_TORCH_PATH, in_dim=None)
         else:
             model = _build_seq_model_from_state(MODEL_TORCH_PATH, in_dim=None, hidden=128,
                                                 kind="lstm" if best_model_name == "torch_lstm" else "gru")
@@ -111,7 +101,6 @@ def load_artifacts():
         "model_type": model_type,
     }
 
-# Torch model builders to mirror your training code
 class MLP(nn.Module):
     def __init__(self, in_dim: int):
         super().__init__()
@@ -149,9 +138,7 @@ class RNNBinary(nn.Module):
         return self.head(h_last)
 
 def _load_mlp_model_state(path: str, in_dim: Optional[int]) -> nn.Module:
-    # build a placeholder; caller may re-instantiate after learning in_dim
     if in_dim is None:
-        # temporary small model; we'll replace at request time
         tmp = MLP(1)
         sd = torch.load(path, map_location="cpu")
         tmp.load_state_dict({k: v for k, v in sd.items() if k in tmp.state_dict() and tmp.state_dict()[k].shape == v.shape}, strict=False)
@@ -163,7 +150,6 @@ def _load_mlp_model_state(path: str, in_dim: Optional[int]) -> nn.Module:
 
 def _build_seq_model_from_state(path: str, in_dim: Optional[int], hidden: int, kind: str) -> nn.Module:
     if in_dim is None:
-        # placeholder; will rebuild later
         tmp = RNNBinary(1, hidden=hidden, kind=kind)
         sd = torch.load(path, map_location="cpu")
         tmp.load_state_dict({k: v for k, v in sd.items() if k in tmp.state_dict() and tmp.state_dict()[k].shape == v.shape}, strict=False)
@@ -182,7 +168,6 @@ def _sklearn_predict_proba(model, X_df: pd.DataFrame) -> np.ndarray:
 def _torch_mlp_predict(model, preproc, X_df: pd.DataFrame) -> np.ndarray:
     X = preproc.transform(X_df)
     if isinstance(model, MLP) and next(model.parameters()).shape[0] != X.shape[1]:
-        # Rebuild with correct input dim and load state
         m = MLP(X.shape[1])
         m.load_state_dict(torch.load(MODEL_TORCH_PATH, map_location="cpu"))
         model = m
@@ -192,11 +177,10 @@ def _torch_mlp_predict(model, preproc, X_df: pd.DataFrame) -> np.ndarray:
     return _sigmoid(logits)
 
 def _build_sequence_matrix(preproc, df_user: pd.DataFrame, feature_cols: list, seq_len: int) -> np.ndarray:
-    # df_user must be sorted by month_start ascending
     X = preproc.transform(df_user[feature_cols])
     n_feat = X.shape[1]
     out = np.zeros((1, seq_len, n_feat), dtype=np.float32)
-    w = X[-seq_len:]  # last seq_len steps (or fewer)
+    w = X[-seq_len:]
     pad = seq_len - w.shape[0]
     if pad > 0:
         out[0, :pad, :] = 0.0
@@ -207,11 +191,8 @@ def _build_sequence_matrix(preproc, df_user: pd.DataFrame, feature_cols: list, s
 
 def _torch_seq_predict(model, preproc, df_user_seq: pd.DataFrame, feature_cols: list, seq_len: int) -> np.ndarray:
     Xseq = _build_sequence_matrix(preproc, df_user_seq, feature_cols, seq_len)
-    # (1, T, F)
-    # ensure correct in_dim
     in_dim = Xseq.shape[2]
     if isinstance(model, RNNBinary) and model.rnn.input_size != in_dim:
-        # rebuild model with correct in_dim and load state
         kind = "lstm" if isinstance(model.rnn, torch.nn.modules.rnn.LSTM) else "gru"
         m = RNNBinary(in_dim=in_dim, hidden=128, kind=kind)
         m.load_state_dict(torch.load(MODEL_TORCH_PATH, map_location="cpu"))
@@ -239,9 +220,6 @@ def latest_row(df: pd.DataFrame) -> pd.DataFrame:
         return df
     return df.sort_values("month_start").tail(1)
 
-# ---------------------------
-# Startup: load artifacts once
-# ---------------------------
 ART = load_artifacts()
 ENGINE = get_engine()
 
@@ -271,11 +249,8 @@ def predict(payload: PredictIn):
     elif model_type == "torch_mlp":
         X = latest_row(df_user)[feature_cols]
         prob = float(_torch_mlp_predict(ART["model"], ART["preproc"], X)[0])
-    else:  # torch_seq (LSTM/GRU)
-        # Need last SEQ_LEN steps for this user; if fewer exist, we'll pad
-        # We use ALL rows of the user, relying on _build_sequence_matrix to take the last SEQ_LEN.
+    else:
         if df_user.shape[0] == 1:
-            # okay to predict with heavy padding, but warn in logs
             pass
         prob = float(_torch_seq_predict(ART["model"], ART["preproc"], df_user, feature_cols, SEQ_LEN)[0])
 

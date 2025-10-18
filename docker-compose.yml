@@ -1,26 +1,19 @@
-# docker-compose.yml — API uses your host DB on localhost:8000
-
 services:
   api:
     build: .
     container_name: churn_api
     environment:
-      # --- DB connection (to your host Postgres) ---
-      DB_HOST: host.docker.internal   # macOS/Windows: built-in DNS to host
-      DB_PORT: "8000"                 # your training DB's non-standard port
+      DB_HOST: host.docker.internal
+      DB_PORT: "8000"
       DB_USER: sn_dehghani
       DB_PASS: sndi
       DB_NAME: sn_dehghani
       DB_SCHEMA: public
       FEATURE_TABLE: final_features
-
-      # --- Model settings ---
       SEQ_LEN: "6"
       ARTIFACT_DIR: /app/artifacts
     ports:
-      - "8080:8080"                   # FastAPI -> http://localhost:8080
+      - "8080:8080"
     volumes:
       - ./notebooks/artifacts:/app/artifacts:ro
-    # If you're on Linux, uncomment to reach the host:
-    # extra_hosts:
-    #   - "host.docker.internal:host-gateway"
+

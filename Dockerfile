@@ -11,7 +11,6 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 
 COPY app /app/app
 
-# Create artifacts dir but DON'T copy from host during build
 RUN mkdir -p /app/artifacts
 
 ENV ARTIFACT_DIR=/app/artifacts
