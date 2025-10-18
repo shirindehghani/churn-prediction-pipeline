@@ -48,3 +48,68 @@ CHURN-PIPELINE/
 ├── .dockerignore
 ├── .gitignore
 
+<!-- Triple backticks with no language specified render monospaced directory trees -->
+
+---
+
+<!-- ========================================================= -->
+<!-- 🧩 PROBLEM DESCRIPTION -->
+<!-- ========================================================= -->
+
+## 🧩 Problem Description
+
+You are provided with **orders**, **CRM**, and **comments** data for users over the past months.  
+
+The goal is to **predict whether a user will churn next month** based on historical activity, customer feedback, and behavior patterns.
+
+---
+
+<!-- ========================================================= -->
+<!-- 📊 DATA OVERVIEW -->
+<!-- ========================================================= -->
+
+## 📊 Data Overview
+
+### 1. Orders
+<!-- `###` creates a third-level heading -->
+
+| Column | Description |
+|--------|--------------|
+| `order_id` | Unique order identifier |
+| `user_id` | Unique user identifier |
+| `is_otd` | Delivered on time (boolean) |
+| `order_date` | Date of order |
+| `delivery_status` | Delivery status label |
+<!-- Markdown tables use pipes `|` and dashes `-` -->
+
+### 2. CRM
+
+| Column | Description |
+|--------|--------------|
+| `order_id` | Unique order identifier |
+| `crm_delivery_request_count` | Count of delivery request tickets |
+| `crm_fake_delivery_request_count` | Count of fake delivery requests |
+| `customer_rate` | Rating given by the customer for the shop |
+| `courier_rate` | Rating given for the courier |
+
+### 3. Comments
+
+| Column | Description |
+|--------|--------------|
+| `order_id` | Unique order identifier |
+| `description` | Free-text comment provided by the customer |
+
+---
+
+<!-- ========================================================= -->
+<!-- 🗄️ DATABASE SETUP -->
+<!-- ========================================================= -->
+
+## 🗄️ Database Setup
+
+### Step 1: Load Raw Data to Postgres
+
+Run the following script to create the database schema and load the raw CSVs:
+
+```bash
+python load_to_postgres.py
