@@ -1,19 +1,16 @@
+version: "3.9"
+
 services:
   api:
     build: .
     container_name: churn_api
+    env_file:
+      - .env
     environment:
-      DB_HOST: host.docker.internal
-      DB_PORT: "8000"
-      DB_USER: sn_dehghani
-      DB_PASS: sndi
-      DB_NAME: sn_dehghani
-      DB_SCHEMA: public
-      FEATURE_TABLE: final_features
       SEQ_LEN: "6"
       ARTIFACT_DIR: /app/artifacts
+      FEATURE_TABLE: final_features
     ports:
       - "8080:8080"
     volumes:
       - ./notebooks/artifacts:/app/artifacts:ro
-
